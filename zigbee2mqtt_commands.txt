@@ -1,0 +1,87 @@
+=======================================================
+ ZIGBEE2MQTT - COMMANDS (RPi 5 + Sonoff V2 CC2652P)
+=======================================================
+
+-------------------------------------------------------
+ 1. FIX CP210X DRIVER (jalankan setiap setelah reboot)
+-------------------------------------------------------
+sudo rmmod cp210x && sudo modprobe cp210x
+
+-------------------------------------------------------
+ 2. VERIFIKASI DONGLE (pastikan tidak ada error -110)
+-------------------------------------------------------
+dmesg | grep -E "ttyUSB|cp210x" | tail -5
+
+-------------------------------------------------------
+ 3. STOP & HAPUS CONTAINER LAMA
+-------------------------------------------------------
+docker stop zigbee2mqtt
+docker rm zigbee2mqtt
+
+-------------------------------------------------------
+ 4. JALANKAN ZIGBEE2MQTT
+-------------------------------------------------------
+docker run -d \
+  --name zigbee2mqtt \
+  --restart=unless-stopped \
+  --device=/dev/ttyUSB0:/dev/ttyUSB0 \
+  --group-add $(stat -c '%g' /dev/ttyUSB0) \
+  --network host \
+  -v /opt/zigbee2mqtt/data:/app/data \
+  -e TZ=Asia/Jakarta \
+  koenkk/zigbee2mqtt:latest
+
+-------------------------------------------------------
+ 5. CEK LOG
+-------------------------------------------------------
+docker logs -f zigbee2mqtt
+
+-------------------------------------------------------
+ 6. AKSES FRONTEND
+-------------------------------------------------------
+http://<IP-RaspberryPi>:8080
+
+=======================================================
+ PERMANENT FIX - Supaya tidak perlu reload manual
+=======================================================
+
+--- Buat udev rule ---
+sudo nano /etc/udev/rules.d/99-zigbee-dongle.rules
+
+--- Isi file tersebut dengan: ---
+ACTION=="add", SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", RUN+="/sbin/rmmod cp210x", RUN+="/sbin/modprobe cp210x"
+
+--- Reload udev rules ---
+sudo udevadm control --reload-rules
+
+=======================================================
+ UPDATE KERNEL (opsional, fix permanen dari OS)
+=======================================================
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+
+=======================================================
+ TROUBLESHOOTING
+=======================================================
+
+--- Cek error USB ---
+dmesg | grep -E "ttyUSB|cp210x" | tail -20
+
+--- Cek proses yang pakai port ---
+sudo lsof /dev/ttyUSB0
+
+--- Cek throttle RPi ---
+vcgencmd get_throttled
+
+--- Cek container berjalan ---
+docker ps | grep zigbee2mqtt
+
+--- Restart container ---
+docker restart zigbee2mqtt
+
+--- Clean install ulang ---
+docker stop zigbee2mqtt
+docker rm zigbee2mqtt
+docker rmi koenkk/zigbee2mqtt:latest
+sudo rm -rf /opt/zigbee2mqtt/data
+sudo mkdir -p /opt/zigbee2mqtt/data
